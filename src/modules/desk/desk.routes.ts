@@ -16,7 +16,7 @@ const deskAuthenticate: RequestHandler = async (req, _res, next) => {
   const token = req.header('authorization')?.replace(/^Bearer /, '') ?? req.header('x-session-token') ?? '';
   try {
     try { const claims = verifyAccessToken(token); if (claims.realm !== 'Desk') throw new ApiError(403, 'This identity cannot access the desk'); req.auth = { subject: claims.sub, kind: 'operator', realm: 'Desk', role: claims.role, accountId: String(req.header('x-account-id') ?? req.query.accountId ?? 'ACC-LOCAL') }; }
-    catch { const trader = await resolveTraderSession(token); req.auth = { subject: trader.traderId, kind: 'trader', realm: 'Broker', role: 'Trader', traderId: trader.traderId, accountId: trader.accountId }; }
+    catch { const trader = await resolveTraderSession(token); if (!trader.accountId) throw new ApiError(409, 'Trader account is not configured'); req.auth = { subject: trader.userId, kind: 'trader', realm: 'Broker', role: 'Trader', traderId: trader.userId, accountId: trader.accountId }; }
     next();
   } catch (error) { next(error); }
 };

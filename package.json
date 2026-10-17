@@ -6,22 +6,29 @@
   "type": "module",
   "main": "dist/src/server.js",
   "scripts": {
+    "prebuild": "node scripts/check-deploy-env.mjs",
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
-    "lint": "eslint src tests --max-warnings=0",
+    "lint": "eslint src api tests --max-warnings=0",
     "test": "vitest run",
     "test:watch": "vitest",
+    "db:indexes": "tsx src/scripts/sync-indexes.ts",
+    "db:sanity": "tsx src/scripts/database-sanity.ts",
+    "db:setup": "npm run migrate:users && npm run seed && npm run db:indexes && npm run db:sanity",
+    "migrate:users": "tsx src/scripts/migrate-users.ts",
+    "verify:users": "tsx src/scripts/verify-users.ts",
     "seed": "tsx src/scripts/seed.ts"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "bcryptjs": "3.0.2",
     "compression": "1.8.2",
     "cors": "2.8.5",
     "dotenv": "17.2.3",
     "express": "5.1.0",
-    "express-rate-limit": "8.7.1",
     "helmet": "8.1.0",
     "jsonwebtoken": "9.0.2",
     "mongoose": "8.24.5",

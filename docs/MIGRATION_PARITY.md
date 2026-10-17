@@ -15,10 +15,11 @@ No module may reinterpret another authority's terminal state. In particular, the
 
 ## Identity and permissions
 
-- Operator realms are separate: Desk, Broker, Exchange and Storage.
+- Authentication identities are normalized in one `users` collection and discriminated by `userType`: Trader, Broker, Exchange, or Storage.
+- Operator authorization realms remain separate at runtime: Broker, Exchange and Storage; Trader users are routed to the account-scoped Desk realm.
 - Roles are Admin, Operations and Read-only. Only Admin/Operations mutate domain state.
 - The last active administrator in a realm cannot be demoted or disabled.
-- Traders are broker clients, not operators. Their opaque 12-hour session token is stored only as SHA-256.
+- Traders are broker clients, not operators, but share the same identity collection. Their opaque 12-hour session token is stored only as SHA-256 in `usersessions`.
 - Trader states: `Active -> Suspended | Closed`, `Suspended -> Active | Closed`, `Closed` is terminal.
 - Suspended users may authenticate to read their reason but cannot trade. Password/status changes end existing sessions.
 

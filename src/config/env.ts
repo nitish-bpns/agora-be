@@ -7,7 +7,6 @@ const schema = z.object({
   MONGODB_URI: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('12h'),
-  CORS_ORIGIN: z.string().default('http://localhost:5173'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   SEED_DEMO_DATA: z.string().default('false').transform((value) => value === 'true')
 });

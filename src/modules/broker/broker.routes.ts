@@ -7,11 +7,11 @@ import { asyncHandler, pagination, parse } from '../../common/http.js';
 import { nextId } from '../../common/ids.js';
 import { recordAudit } from '../audit/audit.service.js';
 import { authenticate, authorize, requireRealm } from '../auth/auth.middleware.js';
-import { Operator } from '../auth/auth.model.js';
+import { User, UserSession } from '../auth/auth.model.js';
 import { ExchangeOrder } from '../exchange/exchange.models.js';
 import { canTrade, traderAuthenticate } from './broker-auth.middleware.js';
 import { endTraderSessions, loginTrader, logoutTrader } from './broker-auth.service.js';
-import { BrokerExecution, BrokerObligation, BrokerOrder, BrokerProfile, Enlistment, SecurityReplica, Trader, TraderSession } from './broker.models.js';
+import { BrokerExecution, BrokerObligation, BrokerOrder, BrokerProfile, Enlistment, SecurityReplica } from './broker.models.js';
 import { cancelBrokerOrder, enlistDeclaration, placeBrokerOrder, refreshSecurities, retryPending, routeBrokerOrder, syncExchangeFeeds } from './broker.service.js';
 
 export const brokerRouter = Router();
@@ -19,25 +19,25 @@ brokerRouter.use(authenticate, requireRealm('Broker'), authorize('Admin', 'Opera
 const write = authorize('Admin', 'Operations');
 
 brokerRouter.get('/dashboard', asyncHandler(async (_req, res) => {
-  await syncExchangeFeeds(); const [activeTraders, totalOrders, routed, stuck, rejected, executions, openObligations] = await Promise.all([Trader.countDocuments({ status: 'Active' }), BrokerOrder.countDocuments(), BrokerOrder.countDocuments({ routingStatus: 'Routed' }), BrokerOrder.countDocuments({ routingStatus: { $in: ['Pending', 'Unrouted', 'Refused'] } }), BrokerOrder.countDocuments({ routingStatus: 'Rejected' }), BrokerExecution.countDocuments(), BrokerObligation.countDocuments({ status: 'Unsettled' })]);
+  await syncExchangeFeeds(); const [activeTraders, totalOrders, routed, stuck, rejected, executions, openObligations] = await Promise.all([User.countDocuments({ userType: 'Trader', status: 'Active' }), BrokerOrder.countDocuments(), BrokerOrder.countDocuments({ routingStatus: 'Routed' }), BrokerOrder.countDocuments({ routingStatus: { $in: ['Pending', 'Unrouted', 'Refused'] } }), BrokerOrder.countDocuments({ routingStatus: 'Rejected' }), BrokerExecution.countDocuments(), BrokerObligation.countDocuments({ status: 'Unsettled' })]);
   res.json({ activeTraders, totalOrders, routed, stuck, rejected, executions, openObligations });
 }));
 brokerRouter.get('/profile', asyncHandler(async (_req, res) => res.json({ profile: await BrokerProfile.findOne({ profileId: 'default' }).lean() })));
 brokerRouter.put('/profile', authorize('Admin'), asyncHandler(async (req, res) => { const body = parse(z.object({ exchangeBrokerId: z.string().min(1), mandiId: z.string().min(1), principalStepIn: z.boolean().default(false) }), req.body); const profile = await BrokerProfile.findOneAndUpdate({ profileId: 'default' }, { $set: body }, { upsert: true, new: true }); res.json(profile); }));
 
-brokerRouter.get('/traders', asyncHandler(async (_req, res) => res.json({ items: await Trader.find().sort({ createdAt: -1 }).lean() })));
+brokerRouter.get('/traders', asyncHandler(async (_req, res) => { const users = await User.find({ userType: 'Trader' }).sort({ createdAt: -1 }).lean(); res.json({ items: users.map((user) => ({ ...user, traderId: user.userId })) }); }));
 brokerRouter.post('/traders', write, asyncHandler(async (req, res) => {
   const body = parse(z.object({ username: z.string().min(3), displayName: z.string().min(1), email: z.string().email().or(z.literal('')).default(''), password: z.string().min(8) }), req.body);
-  if (await Operator.exists({ username: body.username.toLowerCase() })) throw new ApiError(409, 'Username is already assigned to an operator', 'DUPLICATE_USERNAME');
-  const trader = await Trader.create({ traderId: await nextId('trader'), accountId: await nextId('account'), ...body, username: body.username.toLowerCase(), passwordHash: await bcrypt.hash(body.password, 12) }); await recordAudit({ realm: 'Broker', collection: 'traders', recordId: trader.traderId, action: 'Register', actorId: req.auth!.subject, after: trader.toObject() }); res.status(201).json({ traderId: trader.traderId, accountId: trader.accountId, username: trader.username, status: trader.status });
+  if (await User.exists({ username: body.username.toLowerCase() })) throw new ApiError(409, 'Username is already assigned', 'DUPLICATE_USERNAME');
+  const trader = await User.create({ userId: await nextId('trader'), accountId: await nextId('account'), ...body, username: body.username.toLowerCase(), userType: 'Trader', role: 'Trader', status: 'Active', passwordHash: await bcrypt.hash(body.password, 12) }); await recordAudit({ realm: 'Broker', collection: 'users', recordId: trader.userId, action: 'Register', actorId: req.auth!.subject, after: trader.toObject() }); res.status(201).json({ traderId: trader.userId, accountId: trader.accountId, username: trader.username, status: trader.status });
 }));
 brokerRouter.patch('/traders/:traderId/status', write, asyncHandler(async (req, res) => {
-  const body = parse(z.object({ status: z.enum(['Active', 'Suspended', 'Closed']), reason: z.string().default('') }), req.body); const trader = await Trader.findOne({ traderId: req.params.traderId }); if (!trader) throw new ApiError(404, 'Trader not found');
+  const body = parse(z.object({ status: z.enum(['Active', 'Suspended', 'Closed']), reason: z.string().default('') }), req.body); const trader = await User.findOne({ userId: req.params.traderId, userType: 'Trader' }); if (!trader) throw new ApiError(404, 'Trader not found');
   const allowed: Record<string, string[]> = { Active: ['Suspended', 'Closed'], Suspended: ['Active', 'Closed'], Closed: [] }; if (!allowed[trader.status]?.includes(body.status)) throw new ApiError(409, `Transition ${trader.status} to ${body.status} is not allowed`);
-  const before = trader.toObject(); trader.status = body.status; trader.statusReason = body.reason; await trader.save(); await endTraderSessions(trader.traderId); await recordAudit({ realm: 'Broker', collection: 'traders', recordId: trader.traderId, action: 'Status', actorId: req.auth!.subject, before, after: trader.toObject() }); res.json(trader);
+  const before = trader.toObject(); trader.status = body.status; trader.statusReason = body.reason; await trader.save(); await endTraderSessions(trader.userId); await recordAudit({ realm: 'Broker', collection: 'users', recordId: trader.userId, action: 'Status', actorId: req.auth!.subject, before, after: trader.toObject() }); res.json({ ...trader.toObject(), traderId: trader.userId });
 }));
-brokerRouter.post('/traders/:traderId/password', write, asyncHandler(async (req, res) => { const body = parse(z.object({ password: z.string().min(8) }), req.body); const trader = await Trader.findOne({ traderId: req.params.traderId }).select('+passwordHash'); if (!trader) throw new ApiError(404, 'Trader not found'); trader.passwordHash = await bcrypt.hash(body.password, 12); await trader.save(); await endTraderSessions(trader.traderId); res.status(204).end(); }));
-brokerRouter.get('/traders/:traderId/activity', asyncHandler(async (req, res) => { const traderId = req.params.traderId; const [orders, executions, obligations, sessions] = await Promise.all([BrokerOrder.find({ traderId }).sort({ seq: -1 }).lean(), BrokerExecution.find({ traderId }).sort({ seq: -1 }).lean(), BrokerObligation.find({ traderId }).sort({ seq: -1 }).lean(), TraderSession.find({ traderId }).sort({ createdAt: -1 }).lean()]); res.json({ orders, executions, obligations, sessions }); }));
+brokerRouter.post('/traders/:traderId/password', write, asyncHandler(async (req, res) => { const body = parse(z.object({ password: z.string().min(8) }), req.body); const trader = await User.findOne({ userId: req.params.traderId, userType: 'Trader' }).select('+passwordHash'); if (!trader) throw new ApiError(404, 'Trader not found'); trader.passwordHash = await bcrypt.hash(body.password, 12); trader.passwordChanged = true; await trader.save(); await endTraderSessions(trader.userId); res.status(204).end(); }));
+brokerRouter.get('/traders/:traderId/activity', asyncHandler(async (req, res) => { const traderId = req.params.traderId; const [orders, executions, obligations, sessions] = await Promise.all([BrokerOrder.find({ traderId }).sort({ seq: -1 }).lean(), BrokerExecution.find({ traderId }).sort({ seq: -1 }).lean(), BrokerObligation.find({ traderId }).sort({ seq: -1 }).lean(), UserSession.find({ userId: traderId }).sort({ createdAt: -1 }).lean()]); res.json({ orders, executions, obligations, sessions }); }));
 
 brokerRouter.post('/securities/refresh', write, asyncHandler(async (req, res) => res.json({ count: await refreshSecurities(req.auth!.subject) })));
 brokerRouter.get('/securities', asyncHandler(async (_req, res) => res.json({ items: await SecurityReplica.find().sort({ symbol: 1 }).lean() })));
@@ -53,7 +53,7 @@ brokerRouter.post('/enlistments/:enlistmentId/enlist', write, asyncHandler(async
 export const traderRouter = Router();
 traderRouter.post('/auth/login', asyncHandler(async (req, res) => { const body = parse(z.object({ username: z.string().min(1), password: z.string().min(1) }), req.body); res.json(await loginTrader(body.username, body.password)); }));
 traderRouter.post('/auth/logout', traderAuthenticate, asyncHandler(async (req, res) => { const token = req.header('x-session-token') ?? req.header('authorization')!.slice(7); await logoutTrader(token); res.status(204).end(); }));
-traderRouter.get('/me', traderAuthenticate, asyncHandler(async (req, res) => { const trader = await Trader.findOne({ traderId: req.auth!.traderId }).lean(); res.json({ trader, canTrade: trader?.status === 'Active', reason: trader?.statusReason ?? '' }); }));
+traderRouter.get('/me', traderAuthenticate, asyncHandler(async (req, res) => { const user = await User.findOne({ userId: req.auth!.traderId, userType: 'Trader' }).lean(); const trader = user ? { ...user, traderId: user.userId } : null; res.json({ trader, canTrade: trader?.status === 'Active', reason: trader?.statusReason ?? '' }); }));
 traderRouter.get('/securities', traderAuthenticate, asyncHandler(async (req, res) => { const search = String(req.query.search ?? ''); res.json({ items: await SecurityReplica.find(search ? { $or: [{ symbol: { $regex: search, $options: 'i' } }, { name: { $regex: search, $options: 'i' } }] } : {}).sort({ symbol: 1 }).lean() }); }));
 traderRouter.get('/book', traderAuthenticate, asyncHandler(async (req, res) => { const profile = await BrokerProfile.findOne({ profileId: 'default' }); const symbol = String(req.query.symbol ?? '').toUpperCase(); const open = { mandiId: profile?.mandiId, symbol, status: { $in: ['Open', 'Partially Executed'] } }; res.json({ symbol, bids: await ExchangeOrder.find({ ...open, action: 'Buy' }).sort({ price: -1, seq: 1 }).lean(), asks: await ExchangeOrder.find({ ...open, action: 'Sell' }).sort({ price: 1, seq: 1 }).lean() }); }));
 traderRouter.get('/orders', traderAuthenticate, asyncHandler(async (req, res) => res.json({ items: await BrokerOrder.find({ traderId: req.auth!.traderId }).sort({ seq: -1 }).lean() })));

@@ -7,7 +7,8 @@ export const traderAuthenticate: RequestHandler = async (req, _res, next) => {
     const token = req.header('x-session-token') ?? (req.header('authorization')?.startsWith('Bearer ') ? req.header('authorization')!.slice(7) : '');
     if (!token) throw new ApiError(401, 'Authentication is required', 'UNAUTHORIZED');
     const trader = await resolveTraderSession(token);
-    req.auth = { subject: trader.traderId, kind: 'trader', realm: 'Broker', role: 'Trader', accountId: trader.accountId, traderId: trader.traderId };
+    if (!trader.accountId) throw new ApiError(409, 'Trader account is not configured', 'ACCOUNT_NOT_CONFIGURED');
+    req.auth = { subject: trader.userId, kind: 'trader', realm: 'Broker', role: 'Trader', accountId: trader.accountId, traderId: trader.userId };
     next();
   } catch (error) { next(error); }
 };

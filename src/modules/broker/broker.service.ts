@@ -2,10 +2,11 @@ import { ApiError } from '../../common/errors.js';
 import { nextId } from '../../common/ids.js';
 import { Counter } from '../../common/models.js';
 import { recordAudit } from '../audit/audit.service.js';
+import { User } from '../auth/auth.model.js';
 import { ExchangeLot, Execution, Obligation, Security } from '../exchange/exchange.models.js';
 import { cancelExchangeOrder, submitOrder } from '../exchange/matching.service.js';
 import { CustodyLot } from '../storage/storage.models.js';
-import { BrokerExecution, BrokerObligation, BrokerOrder, BrokerProfile, Enlistment, SecurityReplica, Trader } from './broker.models.js';
+import { BrokerExecution, BrokerObligation, BrokerOrder, BrokerProfile, Enlistment, SecurityReplica } from './broker.models.js';
 
 async function nextBrokerSequence(): Promise<number> {
   return (await Counter.findOneAndUpdate({ name: 'broker-order-sequence' }, { $inc: { value: 1 } }, { upsert: true, new: true })).value;
@@ -47,7 +48,8 @@ export async function routeBrokerOrder(orderId: string, actorId: string): Promis
 }
 
 export async function placeBrokerOrder(traderId: string, input: { symbol: string; action: 'Buy' | 'Sell'; quantity: number; price: number; clientRef?: string | undefined; tenor: 'Spot' | '1M' }): Promise<object> {
-  const trader = await Trader.findOne({ traderId }); if (!trader || trader.status !== 'Active') throw new ApiError(403, trader?.statusReason || 'Trader cannot place orders', 'TRADING_REFUSED');
+  const trader = await User.findOne({ userId: traderId, userType: 'Trader' }); if (!trader || trader.status !== 'Active') throw new ApiError(403, trader?.statusReason || 'Trader cannot place orders', 'TRADING_REFUSED');
+  if (!trader.accountId) throw new ApiError(409, 'Trader account is not configured', 'ACCOUNT_NOT_CONFIGURED');
   if (input.clientRef) { const duplicate = await BrokerOrder.findOne({ traderId, clientRef: input.clientRef }); if (duplicate) return duplicate.toObject(); }
   const security = await SecurityReplica.findOne({ symbol: input.symbol.toUpperCase(), listingStatus: 'Listed' }); if (!security) throw new ApiError(400, 'Symbol is not available in the broker security replica');
   const order = await BrokerOrder.create({ orderId: await nextId('order'), traderId, accountId: trader.accountId, ...input, symbol: input.symbol.toUpperCase(), seq: await nextBrokerSequence() });

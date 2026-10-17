@@ -7,16 +7,6 @@ const profileSchema = new Schema({
 }, options);
 export const BrokerProfile = model('BrokerProfile', profileSchema);
 
-const traderSchema = new Schema({
-  traderId: { type: String, required: true, unique: true }, username: { type: String, required: true, unique: true, lowercase: true, trim: true }, displayName: { type: String, required: true },
-  email: { type: String, default: '' }, accountId: { type: String, required: true, unique: true }, status: { type: String, enum: ['Active', 'Suspended', 'Closed'], default: 'Active' },
-  statusReason: { type: String, default: '' }, passwordHash: { type: String, required: true, select: false }
-}, options);
-export const Trader = model('Trader', traderSchema);
-
-const sessionSchema = new Schema({ tokenHash: { type: String, required: true, unique: true }, traderId: { type: String, required: true, index: true }, createdAt: { type: Date, default: Date.now }, expiresAt: { type: Date, required: true }, endedAt: Date }, { versionKey: false });
-export const TraderSession = model('TraderSession', sessionSchema);
-
 const replicaSchema = new Schema({
   securityId: { type: String, required: true, unique: true }, symbol: { type: String, required: true, unique: true }, isin: { type: String, default: '' }, name: { type: String, required: true },
   assetType: { type: String, required: true }, sector: { type: String, default: '' }, currency: { type: String, required: true }, mandiId: { type: String, required: true },
