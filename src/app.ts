@@ -1,7 +1,8 @@
 import compression from 'compression';
 import cors from 'cors';
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import * as helmetModule from 'helmet';
+import type { HelmetOptions } from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
@@ -14,12 +15,14 @@ import { deskRouter } from './modules/desk/desk.routes.js';
 import { exchangeMemberRouter, exchangeRouter } from './modules/exchange/exchange.routes.js';
 import { storageRouter } from './modules/storage/storage.routes.js';
 
+const helmet = helmetModule.default as unknown as (options?: HelmetOptions) => RequestHandler;
+
 export function createApp(): express.Express {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
   app.use(pinoHttp({ logger }));
-  app.use(helmetModule.default({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cors({ origin: '*', credentials: false }));
   app.use(compression());
   app.use(express.json({ limit: '1mb' }));

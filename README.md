@@ -29,7 +29,7 @@ MongoDB transactions are used for matching and settlement, so production MongoDB
 
 The serverless entrypoint is `api/index.ts`, with all incoming paths rewritten to it by `vercel.json`. Configure `MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_EXPIRES_IN`, `NODE_ENV`, and `LOG_LEVEL` in the Vercel project environment.
 
-Run `npm run db:setup` against the production MongoDB deployment once before serving production traffic. Vercel builds fail early when `MONGODB_URI` or `JWT_ACCESS_SECRET` is missing.
+Run `npm run db:setup` against the production MongoDB deployment once before serving production traffic. The serverless function validates `MONGODB_URI` and `JWT_ACCESS_SECRET` at runtime and returns a startup error when either is missing.
 
 The API intentionally accepts requests from every public IP and browser origin. CORS returns `Access-Control-Allow-Origin: *`; authentication and role authorization still protect non-public endpoints.
 

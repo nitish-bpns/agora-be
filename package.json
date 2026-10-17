@@ -6,7 +6,6 @@
   "type": "module",
   "main": "dist/src/server.js",
   "scripts": {
-    "prebuild": "node scripts/check-deploy-env.mjs",
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
