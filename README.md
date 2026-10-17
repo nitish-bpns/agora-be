@@ -33,6 +33,8 @@ Run `npm run db:setup` against the production MongoDB deployment once before ser
 
 The API intentionally accepts requests from every public IP and browser origin. CORS returns `Access-Control-Allow-Origin: *`; authentication and role authorization still protect non-public endpoints.
 
+Public liveness status is available at `/`, `/health`, and `/api/v1/health`. Each returns HTTP 200 with the service name, version, environment, timestamp, and API base path after the function has connected to MongoDB.
+
 ## Commands
 
 - `npm run dev` – development server

@@ -27,7 +27,14 @@ export function createApp(): express.Express {
   app.use(compression());
   app.use(express.json({ limit: '1mb' }));
   app.use(createRateLimit({ windowMs: 60_000, limit: env.NODE_ENV === 'test' ? 10_000 : 300 }));
-  app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'agora', time: new Date().toISOString() }));
+  app.get(['/', '/health', '/api/v1/health'], (_req, res) => res.json({
+    status: 'ok',
+    service: 'agora-api',
+    version: '1.0.0',
+    environment: env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+    apiBase: '/api/v1'
+  }));
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/audit', auditRouter);
   app.use('/api/v1/exchange/member', exchangeMemberRouter);
