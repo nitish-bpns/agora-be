@@ -8,10 +8,13 @@ import { realmForUserType, User, type UserRole, type UserType } from './auth.mod
 export interface AccessClaims {
   sub: string;
   kind: 'operator' | 'trader';
-  realm: 'Desk' | 'Broker' | 'Exchange' | 'Storage';
+  realm: 'Desk' | 'Broker' | 'Exchange' | 'Storage' | 'Cold' | 'Customer' | 'Employee' | 'Financer';
   role: UserRole;
   accountId?: string;
   traderId?: string;
+  partyId?: string;
+  facilityId?: string;
+  financerId?: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -53,14 +56,14 @@ export async function loginByUsername(username: string, password: string): Promi
 
   if (user.status !== 'Active') throw new ApiError(403, user.statusReason || 'This user is inactive', 'USER_INACTIVE');
   const realm = realmForUserType(user.userType);
-  const claims: AccessClaims = { sub: user.userId, kind: 'operator', realm, role: user.role };
+  const claims: AccessClaims = { sub: user.userId, kind: 'operator', realm, role: user.role, ...(user.partyId ? { partyId: user.partyId } : {}), ...(user.facilityId ? { facilityId: user.facilityId } : {}), ...(user.financerId ? { financerId: user.financerId } : {}) };
   return {
     token: signAccessToken(claims),
     kind: 'operator',
     userType: user.userType,
     realm,
     role: user.role,
-    user: { userId: user.userId, username: user.username, displayName: user.displayName }
+    user: { userId: user.userId, username: user.username, displayName: user.displayName, ...(user.partyId ? { partyId: user.partyId } : {}), ...(user.facilityId ? { facilityId: user.facilityId } : {}), ...(user.financerId ? { financerId: user.financerId } : {}) }
   };
 }
 

@@ -2,7 +2,7 @@ import { Schema, model } from 'mongoose';
 
 const auditSchema = new Schema({
   auditId: { type: String, required: true, unique: true, index: true },
-  realm: { type: String, enum: ['Desk', 'Broker', 'Exchange', 'Storage'], required: true, index: true },
+  realm: { type: String, enum: ['Desk', 'Broker', 'Exchange', 'Storage', 'Cold'], required: true, index: true },
   collection: { type: String, required: true, index: true },
   recordId: { type: String, required: true, index: true },
   action: { type: String, required: true },

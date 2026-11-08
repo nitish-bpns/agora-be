@@ -17,7 +17,8 @@ const STANDARD_PASSWORD = bootstrapPassword();
 const STANDARD_OPERATORS = [
   { realm: 'Broker', username: 'broker@agora.com', displayName: 'Broker' },
   { realm: 'Exchange', username: 'exchange@agora.com', displayName: 'Exchange' },
-  { realm: 'Storage', username: 'storage@agora.com', displayName: 'Storage' }
+  { realm: 'Storage', username: 'storage@agora.com', displayName: 'Storage' },
+  { realm: 'Cold', username: 'cold@agora.com', displayName: 'Cold Admin' }
 ] as const;
 const STANDARD_TRADER = { username: 'trader@agora.com', displayName: 'Trader', email: 'trader@agora.com' } as const;
 
@@ -89,7 +90,7 @@ try {
     await DeskPrice.create({ instrumentId: securityId, price: 100, effectiveDate: new Date().toISOString().slice(0, 10) });
     console.log(`Demo broker exchange API key (shown once): ${apiKey}`);
   }
-  console.log('Standard Trader, Broker, Exchange, and Storage users are ready.');
+  console.log('Standard Trader, Broker, Exchange, Storage, and Cold users are ready.');
 } finally {
   await disconnectDatabase();
 }

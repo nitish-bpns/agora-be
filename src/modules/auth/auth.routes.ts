@@ -9,7 +9,7 @@ import { User } from './auth.model.js';
 import { hashPassword, loginByUsername, loginOperator } from './auth.service.js';
 
 export const authRouter = Router();
-const realms = z.enum(['Desk', 'Broker', 'Exchange', 'Storage']);
+const realms = z.enum(['Desk', 'Broker', 'Exchange', 'Storage', 'Cold', 'Customer', 'Employee', 'Financer']);
 const roles = z.enum(['Admin', 'Operations', 'Read-only']);
 
 authRouter.post('/login', asyncHandler(async (req, res) => {
@@ -27,15 +27,18 @@ authRouter.get('/operators', authenticate, authorize('Admin'), asyncHandler(asyn
 }));
 authRouter.post('/operators', authenticate, authorize('Admin'), asyncHandler(async (req, res) => {
   const body = parse(z.object({ username: z.string().min(3), displayName: z.string().min(1), password: z.string().min(8), role: roles }), req.body);
-  if (req.auth!.realm === 'Desk') throw new ApiError(403, 'Desk identities must be traders');
+  const realm = req.auth!.realm;
+  if (!['Broker', 'Exchange', 'Storage', 'Cold'].includes(realm)) throw new ApiError(403, 'Operator accounts can only be created for Broker, Exchange, Storage or Cold portals', 'FORBIDDEN');
   const userId = await nextId('user');
-  const user = await User.create({ userId, ...body, username: body.username.toLowerCase(), userType: req.auth!.realm, status: 'Active', passwordHash: await hashPassword(body.password) });
-  await recordAudit({ realm: req.auth!.realm, collection: 'users', recordId: userId, action: 'Create', actorId: req.auth!.subject, after: user.toObject() });
+  const user = await User.create({ userId, ...body, username: body.username.toLowerCase(), userType: realm, status: 'Active', passwordHash: await hashPassword(body.password) });
+  await recordAudit({ realm, collection: 'users', recordId: userId, action: 'Create', actorId: req.auth!.subject, after: user.toObject() });
   res.status(201).json({ userId: user.userId, username: user.username, displayName: user.displayName, role: user.role, isActive: user.status === 'Active' });
 }));
 authRouter.patch('/operators/:userId', authenticate, authorize('Admin'), asyncHandler(async (req, res) => {
   const body = parse(z.object({ displayName: z.string().min(1).optional(), role: roles.optional(), isActive: z.boolean().optional(), password: z.string().min(8).optional() }), req.body);
-  const user = await User.findOne({ userId: req.params.userId, userType: req.auth!.realm }).select('+passwordHash');
+  const realm = req.auth!.realm;
+  if (!['Broker', 'Exchange', 'Storage', 'Cold'].includes(realm)) throw new ApiError(403, 'Operator accounts can only be managed for Broker, Exchange, Storage or Cold portals', 'FORBIDDEN');
+  const user = await User.findOne({ userId: req.params.userId, userType: realm }).select('+passwordHash');
   if (!user) throw new ApiError(404, 'Operator not found');
   if (user.role === 'Admin' && (body.role && body.role !== 'Admin' || body.isActive === false)) {
     const activeAdmins = await User.countDocuments({ userType: user.userType, role: 'Admin', status: 'Active' });
@@ -47,6 +50,6 @@ authRouter.patch('/operators/:userId', authenticate, authorize('Admin'), asyncHa
   if (body.isActive !== undefined) user.status = body.isActive ? 'Active' : 'Inactive';
   if (body.password) { user.passwordHash = await hashPassword(body.password); user.passwordChanged = true; }
   await user.save();
-  await recordAudit({ realm: req.auth!.realm, collection: 'users', recordId: user.userId, action: 'Update', actorId: req.auth!.subject, before, after: user.toObject() });
+  await recordAudit({ realm, collection: 'users', recordId: user.userId, action: 'Update', actorId: req.auth!.subject, before, after: user.toObject() });
   res.json({ userId: user.userId, role: user.role, isActive: user.status === 'Active' });
 }));

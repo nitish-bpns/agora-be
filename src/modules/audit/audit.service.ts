@@ -3,7 +3,7 @@ import { nextId } from '../../common/ids.js';
 import { AuditEvent } from './audit.model.js';
 
 interface AuditInput {
-  realm: 'Desk' | 'Broker' | 'Exchange' | 'Storage';
+  realm: 'Desk' | 'Broker' | 'Exchange' | 'Storage' | 'Cold' | 'Customer' | 'Employee' | 'Financer';
   collection: string;
   recordId: string;
   action: string;
@@ -25,10 +25,14 @@ export async function recordAudit(input: AuditInput, session?: ClientSession): P
   const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
   const changes = [...fields].filter((field) => !['_id', '__v', 'updatedAt'].includes(field)).filter((field) => JSON.stringify(stable(before[field])) !== JSON.stringify(stable(after[field])));
   if (changes.length === 0) changes.push('*');
-  const docs = await Promise.all(changes.map(async (field) => ({
-    auditId: await nextId('audit'), realm: input.realm, collection: input.collection, recordId: input.recordId,
-    action: input.action, field, oldValue: field === '*' ? undefined : stable(before[field]),
-    newValue: field === '*' ? input.metadata : stable(after[field]), actorId: input.actorId ?? 'system', metadata: input.metadata
-  })));
+  // Generate ids sequentially: nextId races on the shared Counter when called concurrently.
+  const docs = [];
+  for (const field of changes) {
+    docs.push({
+      auditId: await nextId('audit'), realm: input.realm, collection: input.collection, recordId: input.recordId,
+      action: input.action, field, oldValue: field === '*' ? undefined : stable(before[field]),
+      newValue: field === '*' ? input.metadata : stable(after[field]), actorId: input.actorId ?? 'system', metadata: input.metadata
+    });
+  }
   await AuditEvent.insertMany(docs, session ? { session } : {});
 }

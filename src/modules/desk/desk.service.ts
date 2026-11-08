@@ -2,12 +2,29 @@ import { ApiError } from '../../common/errors.js';
 import { isoDate } from '../../common/dates.js';
 import { nextId } from '../../common/ids.js';
 import { recordAudit } from '../audit/audit.service.js';
+import { User } from '../auth/auth.model.js';
 import { BrokerExecution, BrokerObligation, BrokerOrder, SecurityReplica } from '../broker/broker.models.js';
 import { placeBrokerOrder, syncExchangeFeeds } from '../broker/broker.service.js';
 import { CashEntry, DeskAccount, DeskInstrument, DeskObligation, DeskOrder, DeskPrice, DeskTrade } from './desk.models.js';
 import { walkPositions, type AccountingTrade } from './position-engine.js';
+import { assertInstrumentSellFree } from '../warehouse/pledge.service.js';
 
 export interface TradeInput { ticketId?: string | undefined; orderId?: string | undefined; instrumentId: string; action: 'Buy' | 'Sell'; quantity: number; price: number; charges?: number | undefined; currency?: string | undefined; tradeDate: string; settlementDate?: string | undefined; status?: 'Draft' | 'Submitted' | 'Completed' | undefined; tradeOrigin?: 'External' | 'System' | undefined; remarks?: string | undefined; executionId?: string | undefined; }
+
+/**
+ * When a desk account is owned by a warehouse customer (trader user with a linked party),
+ * a Sell of an exchange-linked commodity cannot exceed that party's unpledged stock.
+ * Pledged goods are lien-held by financers and must not be traded on the exchange.
+ */
+async function assertDeskSellFree(input: { accountId: string; symbol: string | null; quantity: number; action: string }): Promise<void> {
+  if (input.action !== 'Sell' || !input.symbol) return;
+  const account = await DeskAccount.findOne({ accountId: input.accountId }).lean();
+  if (!account?.traderId) return;
+  const trader = await User.findOne({ userId: account.traderId }).lean();
+  const partyId = trader?.partyId ?? null;
+  if (!partyId) return;
+  await assertInstrumentSellFree({ symbol: input.symbol, partyId, quantity: input.quantity });
+}
 
 function cashMovement(trade: { action: string; quantity: number; price: number; charges: number; instrumentId: string }): { amount: number; entryType: 'debit' | 'credit'; description: string } {
   const consideration = trade.quantity * trade.price;
@@ -32,6 +49,8 @@ export async function recalculateOrder(orderId: string): Promise<void> {
 export async function createTrade(accountId: string, input: TradeInput, actorId: string): Promise<object> {
   if (!await DeskInstrument.exists({ instrumentId: input.instrumentId, active: true })) throw new ApiError(400, 'Instrument does not exist or is inactive');
   if (input.quantity <= 0 || input.price <= 0 || (input.charges ?? 0) < 0) throw new ApiError(400, 'Quantity and price must be positive and charges cannot be negative');
+  const instrument = await DeskInstrument.findOne({ instrumentId: input.instrumentId }).lean();
+  await assertDeskSellFree({ accountId, symbol: instrument?.symbol ?? null, quantity: input.quantity, action: input.action ?? '' });
   const tradeId = await nextId('trade');
   const trade = await DeskTrade.create({ tradeId, accountId, ...input, charges: input.charges ?? 0, currency: input.currency ?? 'USD', status: input.status ?? 'Completed', tradeOrigin: input.tradeOrigin ?? 'External' });
   await syncTradeCash(trade, actorId); await recordAudit({ realm: 'Desk', collection: 'trades', recordId: tradeId, action: 'Create', actorId, after: trade.toObject() }); if (trade.orderId) await recalculateOrder(trade.orderId); return trade.toObject();
@@ -78,6 +97,8 @@ export async function syncBrokerAccount(traderId: string, accountId: string, act
 }
 
 export async function placeDeskBrokerOrder(traderId: string, accountId: string, input: { instrumentId: string; action: 'Buy' | 'Sell'; quantity: number; price: number; tenor: 'Spot' | '1M'; remarks?: string }, actorId: string): Promise<object> {
-  const instrument = await DeskInstrument.findOne({ instrumentId: input.instrumentId, active: true }); if (!instrument) throw new ApiError(400, 'Instrument is not active'); const orderId = await nextId('order');
+  const instrument = await DeskInstrument.findOne({ instrumentId: input.instrumentId, active: true }); if (!instrument) throw new ApiError(400, 'Instrument is not active');
+  await assertDeskSellFree({ accountId, symbol: instrument.symbol ?? null, quantity: input.quantity, action: input.action });
+  const orderId = await nextId('order');
   const deskOrder = await DeskOrder.create({ orderId, accountId, ...input, tradeDate: isoDate(), status: 'Open' }); const brokerOrder = await placeBrokerOrder(traderId, { symbol: instrument.symbol, action: input.action, quantity: input.quantity, price: input.price, tenor: input.tenor, clientRef: orderId }) as Record<string, unknown>; deskOrder.brokerOrderId = String(brokerOrder.orderId ?? ''); deskOrder.brokerRoutingStatus = String(brokerOrder.routingStatus ?? ''); if (brokerOrder.exchangeStatus) deskOrder.status = String(brokerOrder.exchangeStatus) as typeof deskOrder.status; await deskOrder.save(); await recordAudit({ realm: 'Desk', collection: 'orders', recordId: orderId, action: 'Route', actorId, after: deskOrder.toObject() }); return deskOrder.toObject();
 }

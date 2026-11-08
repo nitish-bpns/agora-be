@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 
-export const USER_TYPES = ['Trader', 'Broker', 'Exchange', 'Storage'] as const;
+export const USER_TYPES = ['Trader', 'Broker', 'Exchange', 'Storage', 'Cold', 'Customer', 'Employee', 'Financer'] as const;
 export const USER_ROLES = ['Trader', 'Admin', 'Operations', 'Read-only'] as const;
 export const USER_STATUSES = ['Active', 'Suspended', 'Closed', 'Inactive'] as const;
 export type UserType = (typeof USER_TYPES)[number];
@@ -18,6 +18,9 @@ const userSchema = new Schema({
   status: { type: String, enum: USER_STATUSES, required: true, default: 'Active', index: true },
   statusReason: { type: String, default: '' },
   accountId: { type: String, sparse: true, unique: true, index: true },
+  partyId: { type: String, default: null, index: true }, // Customer users → their Party
+  facilityId: { type: String, default: null, index: true }, // Employee users → their facility
+  financerId: { type: String, default: null, index: true }, // Financer users → their Financer record
   passwordChanged: { type: Boolean, default: false }
 }, { timestamps: true, versionKey: false });
 userSchema.index({ userType: 1, status: 1 });
@@ -33,6 +36,6 @@ const userSessionSchema = new Schema({
 userSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const UserSession = model('UserSession', userSessionSchema);
 
-export function realmForUserType(userType: UserType): 'Desk' | 'Broker' | 'Exchange' | 'Storage' {
+export function realmForUserType(userType: UserType): 'Desk' | 'Broker' | 'Exchange' | 'Storage' | 'Cold' | 'Customer' | 'Employee' | 'Financer' {
   return userType === 'Trader' ? 'Desk' : userType;
 }

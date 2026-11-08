@@ -4,10 +4,13 @@ declare global {
       auth?: {
         subject: string;
         kind: 'operator' | 'trader';
-        realm: 'Desk' | 'Broker' | 'Exchange' | 'Storage';
+        realm: 'Desk' | 'Broker' | 'Exchange' | 'Storage' | 'Cold' | 'Customer' | 'Employee' | 'Financer';
         role: 'Admin' | 'Operations' | 'Read-only' | 'Trader';
         accountId?: string;
         traderId?: string;
+        partyId?: string;
+        facilityId?: string;
+        financerId?: string;
       };
     }
   }

@@ -14,6 +14,14 @@ import { brokerRouter, traderRouter } from './modules/broker/broker.routes.js';
 import { deskRouter } from './modules/desk/desk.routes.js';
 import { exchangeMemberRouter, exchangeRouter } from './modules/exchange/exchange.routes.js';
 import { storageRouter } from './modules/storage/storage.routes.js';
+import { coldRouter } from './modules/warehouse/cold-masters.routes.js';
+import { coldInventoryRouter } from './modules/warehouse/cold-inventory.routes.js';
+import { coldFinanceRouter } from './modules/warehouse/cold-finance.routes.js';
+import { coldIntegrationRouter } from './modules/warehouse/cold-integration.routes.js';
+import { coldCentralRouter } from './modules/warehouse/cold-central.routes.js';
+import { customerRouter } from './modules/warehouse/customer.routes.js';
+import { employeeRouter } from './modules/warehouse/employee.routes.js';
+import { pledgeRouter, customerPledgeRouter, financerPledgeRouter } from './modules/warehouse/pledge.routes.js';
 
 const helmet = helmetModule.default as unknown as (options?: HelmetOptions) => RequestHandler;
 
@@ -43,6 +51,16 @@ export function createApp(): express.Express {
   app.use('/api/v1/trader', traderRouter);
   app.use('/api/v1/desk', deskRouter);
   app.use('/api/v1/storage', storageRouter);
+  app.use('/api/v1/ops', coldRouter);
+  app.use('/api/v1/ops', coldInventoryRouter);
+  app.use('/api/v1/ops', coldFinanceRouter);
+  app.use('/api/v1/ops', coldIntegrationRouter);
+  app.use('/api/v1/ops', coldCentralRouter);
+  app.use('/api/v1/ops', pledgeRouter);
+  app.use('/api/v1/customer', customerRouter);
+  app.use('/api/v1/customer', customerPledgeRouter);
+  app.use('/api/v1/employee', employeeRouter);
+  app.use('/api/v1/financer', financerPledgeRouter);
   app.use(notFound);
   app.use(errorHandler);
   return app;

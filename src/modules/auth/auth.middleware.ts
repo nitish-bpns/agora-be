@@ -7,7 +7,7 @@ export const authenticate: RequestHandler = (req, _res, next) => {
   const token = bearer?.startsWith('Bearer ') ? bearer.slice(7) : req.header('x-session-token');
   if (!token) return next(new ApiError(401, 'Authentication is required', 'UNAUTHORIZED'));
   const claims = verifyAccessToken(token);
-  req.auth = { subject: claims.sub, kind: claims.kind, realm: claims.realm, role: claims.role, ...(claims.accountId ? { accountId: claims.accountId } : {}), ...(claims.traderId ? { traderId: claims.traderId } : {}) };
+  req.auth = { subject: claims.sub, kind: claims.kind, realm: claims.realm, role: claims.role, ...(claims.accountId ? { accountId: claims.accountId } : {}), ...(claims.traderId ? { traderId: claims.traderId } : {}), ...(claims.partyId ? { partyId: claims.partyId } : {}), ...(claims.facilityId ? { facilityId: claims.facilityId } : {}), ...(claims.financerId ? { financerId: claims.financerId } : {}) };
   next();
 };
 
@@ -15,6 +15,6 @@ export function authorize(...roles: Array<'Admin' | 'Operations' | 'Read-only' |
   return (req, _res, next) => req.auth && roles.includes(req.auth.role) ? next() : next(new ApiError(403, 'You do not have permission to perform this action', 'FORBIDDEN'));
 }
 
-export function requireRealm(...realms: Array<'Desk' | 'Broker' | 'Exchange' | 'Storage'>): RequestHandler {
+export function requireRealm(...realms: Array<'Desk' | 'Broker' | 'Exchange' | 'Storage' | 'Cold' | 'Customer' | 'Employee' | 'Financer'>): RequestHandler {
   return (req, _res, next) => req.auth && realms.includes(req.auth.realm) ? next() : next(new ApiError(403, 'This identity cannot access the requested portal', 'WRONG_REALM'));
 }
