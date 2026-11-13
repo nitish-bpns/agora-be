@@ -22,6 +22,7 @@ import { coldCentralRouter } from './modules/warehouse/cold-central.routes.js';
 import { customerRouter } from './modules/warehouse/customer.routes.js';
 import { employeeRouter } from './modules/warehouse/employee.routes.js';
 import { pledgeRouter, customerPledgeRouter, financerPledgeRouter } from './modules/warehouse/pledge.routes.js';
+import { opsLeadRouter, publicRouter } from './modules/public/public.routes.js';
 
 const helmet = helmetModule.default as unknown as (options?: HelmetOptions) => RequestHandler;
 
@@ -45,6 +46,8 @@ export function createApp(): express.Express {
   }));
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/audit', auditRouter);
+  app.use('/api/v1/public', publicRouter);
+  app.use('/api/v1/ops/public-leads', opsLeadRouter);
   app.use('/api/v1/exchange/member', exchangeMemberRouter);
   app.use('/api/v1/exchange', exchangeRouter);
   app.use('/api/v1/broker', brokerRouter);

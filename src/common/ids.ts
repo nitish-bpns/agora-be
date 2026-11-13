@@ -9,7 +9,7 @@ const prefixes = {
   driver: 'DRV', facilityUser: 'FCU', chargeType: 'CHG', movement: 'MOV', genealogy: 'GEN',
   ownershipEvent: 'OWN', gatepass: 'GTP', interFacilityTransfer: 'IFT', trip: 'TRP', period: 'PRD',
   journal: 'JRN', bill: 'BIL', payment: 'PAY', device: 'DEV', catalogueModel: 'CAT', measurement: 'MEA',
-  image: 'IMG', grading: 'GRD', financer: 'FIN', pledgeApplication: 'PLA', pledge: 'PLG', pledgeTransaction: 'PLT'
+  image: 'IMG', grading: 'GRD', financer: 'FIN', pledgeApplication: 'PLA', pledge: 'PLG', pledgeTransaction: 'PLT', lead: 'LEAD'
 } as const;
 
 export type IdKind = keyof typeof prefixes;
